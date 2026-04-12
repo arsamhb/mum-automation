@@ -18,18 +18,7 @@ jest.mock('../src/helper', () => ({
 
 jest.mock('../src/services/dexRegistry', () => ({
 	DexRegistry: jest.fn().mockImplementation(() => ({
-		getAllDexKeys: jest.fn(() => [
-			'dydxv4',
-			'dydx',
-			'perpetual',
-			'gmx',
-			'bluefin',
-			'hyperliquid',
-			'grvt',
-			'gains',
-			'gtrade',
-			'gns'
-		])
+		getAllDexKeys: jest.fn(() => ['gains', 'gtrade', 'gns'])
 	}))
 }));
 
@@ -38,7 +27,7 @@ import { AlertObject } from '../src/types';
 
 describe('validateAlert', () => {
 	const baseAlert: AlertObject = {
-		exchange: 'dydx',
+		exchange: 'gains',
 		strategy: 'TestStrategy',
 		market: 'BTC-USD',
 		size: 0.1,
@@ -49,31 +38,23 @@ describe('validateAlert', () => {
 	};
 
 	describe('exchange validation', () => {
-		it('accepts "dydx" as valid exchange', async () => {
-			const result = await validateAlert({ ...baseAlert, exchange: 'dydx' });
-			expect(result).toBe(true);
-		});
-
-		it('accepts "perpetual" as valid exchange', async () => {
-			const result = await validateAlert({
-				...baseAlert,
-				exchange: 'perpetual'
-			});
-			expect(result).toBe(true);
-		});
-
-		it('accepts "hyperliquid" as valid exchange', async () => {
-			const result = await validateAlert({
-				...baseAlert,
-				exchange: 'hyperliquid'
-			});
-			expect(result).toBe(true);
-		});
-
 		it('accepts "gains" as valid exchange', async () => {
+			const result = await validateAlert({ ...baseAlert, exchange: 'gains' });
+			expect(result).toBe(true);
+		});
+
+		it('accepts "gtrade" as valid exchange', async () => {
 			const result = await validateAlert({
 				...baseAlert,
-				exchange: 'gains'
+				exchange: 'gtrade'
+			});
+			expect(result).toBe(true);
+		});
+
+		it('accepts "gns" as valid exchange', async () => {
+			const result = await validateAlert({
+				...baseAlert,
+				exchange: 'gns'
 			});
 			expect(result).toBe(true);
 		});

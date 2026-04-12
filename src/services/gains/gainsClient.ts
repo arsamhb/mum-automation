@@ -249,7 +249,7 @@ export class GainsClient extends AbstractDexClient {
 				);
 				return undefined;
 			}
-			// Same convention as dYdX / Hyperliquid: notional USD ≈ equity × multiplier
+			// Notional USD ≈ margin equity × multiplier
 			orderSizeUsd = equityUsd * Number(alertMessage.sizeByLeverage);
 		} else if (alertMessage.size !== undefined) {
 			orderSizeUsd = Math.floor(

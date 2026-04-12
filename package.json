@@ -1,7 +1,7 @@
 {
 	"name": "tradingview-alert-connector",
 	"version": "1.0.0",
-	"description": "Free and self-hosted tool for you to Integrate TradingView strategy alert and execute automated trading for dYdX.",
+	"description": "Self-hosted webhook that receives TradingView alerts and executes trades on Gains Network (gTrade).",
 	"homepage": "https://tv-connector.gitbook.io/docs/",
 	"main": "index.js",
 	"engines": {
@@ -14,7 +14,6 @@
 		"start:test": "tsc && NODE_ENV=test ts-node dist/index.js",
 		"start:dev": "tsc && NODE_ENV=development tsc-watch --onSuccess \"ts-node dist/index.js\"",
 		"start:watch": "tsc && NODE_ENV=production tsc-watch --onSuccess \"node dist/index.js\"",
-		"decode": "ts-node scripts/decode.ts",
 		"test": "jest",
 		"test:prod": "NODE_ENV=production jest",
 		"ngrok": "ngrok http 3000",
@@ -23,11 +22,7 @@
 	"author": "0xIbuki",
 	"license": "GPL-3.0-only",
 	"dependencies": {
-		"@bluefin-exchange/bluefin-v2-client": "^5.2.35",
-		"@dydxprotocol/v4-client-js": "^1.0.27",
 		"@gainsnetwork/sdk": "^1.8.8",
-		"@nktkas/hyperliquid": "^0.31.0",
-		"@perp/sdk-curie": "^1.22.0",
 		"@sentry/integrations": "^6.19.1",
 		"@sentry/node": "^6.18.2",
 		"@sentry/tracing": "^6.18.2",
@@ -37,14 +32,10 @@
 		"axios": "^1.6.7",
 		"big.js": "6.1.1",
 		"config": "^3.3.7",
-		"decimal.js": "^10.4.3",
 		"dotenv": "^16.0.0",
 		"ethers": "^5.7.2",
-		"ethers-v6": "npm:ethers@6.13.4",
 		"express": "^4.17.3",
 		"helmet": "^5.0.2",
-		"js-yaml": "^4.1.0",
-		"micro-eth-signer": "^0.18.1",
 		"node-json-db": "^1.4.1",
 		"typescript": "^5.1.6"
 	},

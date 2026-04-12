@@ -27,7 +27,7 @@ export const validateAlert = async (
 	// check exchange
 	if (alertMessage.exchange) {
 		const validExchanges = new DexRegistry().getAllDexKeys();
-		if (!validExchanges.includes(alertMessage.exchange)) {
+		if (!validExchanges.includes(alertMessage.exchange.toLowerCase())) {
 			console.error('Exchange name must be one of: ' + validExchanges.join(', '));
 			return false;
 		}

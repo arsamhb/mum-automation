@@ -1,30 +1,3 @@
-Perpetual:
-  Network:
-    host: https://mainnet.optimism.io/
-  User:
-    slippage: 0.05
-GMX:
-  Network:
-    host: 'https://arb1.arbitrum.io/rpc'
-Hyperliquid:
-  Network:
-    host: https://api.hyperliquid.xyz
-  User:
-    slippage: 0.05
-    builderFee: 0
-Grvt:
-  Network:
-    env: mainnet
-  User:
-    slippage: 0.05
-DydxV4:
-  IndexerConfig:
-    httpsEndpoint: https://indexer.dydx.trade
-    wssEndpoint: wss://indexer.dydx.trade/v4/w
-  ValidatorConfig:
-    restEndpoint: https://dydx-ops-rpc.kingnodes.com
-    # restEndpoint: https://dydx-rest.publicnode.com
-    # restEndpoint: https://dydx-mainnet-full-rpc.public.blastapi.io
 Gains:
   Network:
     chainId: 42161

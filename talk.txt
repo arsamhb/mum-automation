@@ -1,0 +1,10 @@
+{
+"exchange": "gains",
+"strategy":"testStrategy",
+"market":"BTC/USD",
+"size":"0.0001",
+"reverse":false,
+"order":"{{strategy.order.action}}",
+"position":"{{strategy.market_position}}",
+"price":"{{strategy.order.price}}"
+}

@@ -12,32 +12,11 @@ router.get('/accounts', async (req, res) => {
 	console.log('Received GET request.');
 
 	const dexRegistry = new DexRegistry();
-	const dexNames = [
-		'dydxv4',
-		'perpetual',
-		'gmx',
-		'bluefin',
-		'hyperliquid',
-		'grvt',
-		'gains'
-	];
-	const dexClients = dexNames.map((name) => dexRegistry.getDex(name));
+	const client = dexRegistry.getDex('gains');
 
 	try {
-		const accountStatuses = await Promise.all(
-			dexClients.map((client) => client.getIsAccountReady())
-		);
-
-		const message = {
-			dYdX_v4: accountStatuses[0], // dydxv4
-			PerpetualProtocol: accountStatuses[1], // perpetual
-			GMX: accountStatuses[2], // gmx
-			Bluefin: accountStatuses[3], // bluefin
-			Hyperliquid: accountStatuses[4], // hyperliquid
-			GRVT: accountStatuses[5], // grvt
-			Gains_gTrade: accountStatuses[6] // gains
-		};
-		res.send(message);
+		const ready = client ? await client.getIsAccountReady() : false;
+		res.send({ Gains_gTrade: ready });
 	} catch (error) {
 		console.error('Failed to get account readiness:', error);
 		res.status(500).send('Internal server error');
@@ -67,8 +46,8 @@ router.post('/', async (req, res) => {
 		res.send('Error. alert message is not valid');
 		return;
 	}
-		
-	const exchange = req.body['exchange']?.toLowerCase() || 'dydx';
+
+	const exchange = req.body['exchange']?.toLowerCase() || 'gains';
 
 	const dexClient = new DexRegistry().getDex(exchange);
 
@@ -77,20 +56,12 @@ router.post('/', async (req, res) => {
 		return;
 	}
 
-	// TODO: add check if dex client isReady 
-
 	try {
-		const result = await dexClient.placeOrder(req.body);
-
+		await dexClient.placeOrder(req.body);
 		res.send('OK');
-		// checkAfterPosition(req.body);
 	} catch (e) {
 		res.send('error');
 	}
-});
-
-router.get('/debug-sentry', function mainHandler(req, res) {
-	throw new Error('My first Sentry error!');
 });
 
 export default router;
