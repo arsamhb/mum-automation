@@ -46,8 +46,9 @@ router.get('/accounts', async (req, res) => {
 
 router.post('/', async (req, res) => {
 	console.log(
-		'Received TradingView strategy alert JSON:',
-		JSON.stringify(req.body)
+		'Parsed alert payload:',
+		JSON.stringify(req.body),
+		req.rawBody != null ? `(raw length ${req.rawBody.length})` : ''
 	);
 
 	const validated = await validateAlert(req.body);

@@ -1,5 +1,6 @@
 import express from 'express';
 import controller from './controllers/index';
+import { captureWebhookBody } from './middleware/captureWebhookBody';
 import * as Sentry from '@sentry/node';
 import * as Tracing from '@sentry/tracing';
 import { CaptureConsole as CaptureConsoleIntegration } from '@sentry/integrations';
@@ -47,19 +48,10 @@ if (process.env.SENTRY_DNS) {
 
 app.use(helmet());
 
-// TradingView sends the alert message as text/plain with a JSON string in the body.
-// Default express.json() only handles application/json, so the body was {} and validation failed.
-app.use(
-	express.json({
-		type: (req) => {
-			const ct = req.headers['content-type'] || '';
-			return (
-				/^application\/json/i.test(ct) || /^text\/plain/i.test(ct)
-			);
-		}
-	})
-);
-app.use(express.urlencoded({ extended: true }));
+// Accept any Content-Type: capture raw bytes, log, then best-effort parse (JSON, form, or plain text).
+// TradingView / Pine payloads vary; strict express.json() would throw on non-JSON bodies.
+app.use(express.raw({ type: () => true, limit: '10mb' }));
+app.use(captureWebhookBody);
 
 app.use('/', controller);
 
