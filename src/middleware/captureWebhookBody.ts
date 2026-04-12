@@ -46,36 +46,41 @@ function parsePayload(text: string, contentType: string): Record<string, unknown
 }
 
 /**
- * After `express.raw`, turns the buffer into `req.rawBody` (string), logs it,
- * and sets `req.body` to a parsed object when possible; otherwise wraps plain
- * text or malformed content without throwing.
+ * After `express.text`, `req.body` is the raw string TradingView sent. We keep a copy in
+ * `req.rawBody`, log it, then JSON.parse when the text looks like JSON — never assume
+ * Express already parsed JSON (text/plain bodies are always strings).
  */
 export function captureWebhookBody(
 	req: Request,
 	res: Response,
 	next: NextFunction
 ): void {
-	const buf = req.body as Buffer | undefined;
-	if (!buf || !Buffer.isBuffer(buf) || buf.length === 0) {
+	const raw =
+		typeof req.body === 'string'
+			? req.body
+			: Buffer.isBuffer(req.body)
+				? (req.body as Buffer).toString('utf8')
+				: '';
+
+	if (!raw.length) {
 		req.rawBody = '';
 		req.body = {};
 		next();
 		return;
 	}
 
-	const text = buf.toString('utf8');
-	req.rawBody = text;
+	req.rawBody = raw;
 
 	const preview =
-		text.length > MAX_LOG_CHARS
-			? `${text.slice(0, MAX_LOG_CHARS)}... [truncated, ${text.length} chars total]`
-			: text;
+		raw.length > MAX_LOG_CHARS
+			? `${raw.slice(0, MAX_LOG_CHARS)}... [truncated, ${raw.length} chars total]`
+			: raw;
 
 	console.log(
-		`[webhook] ${req.method} ${req.originalUrl} content-type=${req.headers['content-type'] ?? '(none)'} bytes=${buf.length}`
+		`[webhook] ${req.method} ${req.originalUrl} content-type=${req.headers['content-type'] ?? '(none)'} utf8Bytes=${Buffer.byteLength(raw, 'utf8')}`
 	);
-	console.log('[webhook] raw payload:', preview);
+	console.log('[webhook] raw payload (string):', preview);
 
-	req.body = parsePayload(text, req.headers['content-type'] || '');
+	req.body = parsePayload(raw, req.headers['content-type'] || '');
 	next();
 }

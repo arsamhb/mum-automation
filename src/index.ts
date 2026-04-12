@@ -48,9 +48,9 @@ if (process.env.SENTRY_DNS) {
 
 app.use(helmet());
 
-// Accept any Content-Type: capture raw bytes, log, then best-effort parse (JSON, form, or plain text).
-// TradingView / Pine payloads vary; strict express.json() would throw on non-JSON bodies.
-app.use(express.raw({ type: () => true, limit: '10mb' }));
+// TradingView usually sends Content-Type: text/plain; the body is a string, not a pre-parsed object.
+// Read as UTF-8 text first, then JSON.parse in captureWebhookBody (same idea as express.text + manual parse).
+app.use(express.text({ type: () => true, limit: '10mb', defaultCharset: 'utf-8' }));
 app.use(captureWebhookBody);
 
 app.use('/', controller);
