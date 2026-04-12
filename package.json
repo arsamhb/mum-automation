@@ -36,6 +36,7 @@
 		"ethers": "^5.7.2",
 		"express": "^4.17.3",
 		"helmet": "^5.0.2",
+		"js-yaml": "^4.1.0",
 		"node-json-db": "^1.4.1",
 		"typescript": "^5.1.6"
 	},
