@@ -1,4 +1,4 @@
-Gains:
+gains:
   Network:
     chainId: 42161
     rpc: https://arb1.arbitrum.io/rpc
