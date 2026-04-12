@@ -2,6 +2,17 @@ import type { NextFunction, Request, Response } from 'express';
 
 const MAX_LOG_CHARS = 16 * 1024;
 
+/** Plain-text body that is only `buy` or `sell` (typical `{{strategy.order.action}}` output). */
+function parsePlainStrategyOrderAction(
+	trimmed: string
+): 'buy' | 'sell' | null {
+	const lower = trimmed.toLowerCase();
+	if (lower === 'buy' || lower === 'sell') {
+		return lower as 'buy' | 'sell';
+	}
+	return null;
+}
+
 function parsePayload(text: string, contentType: string): Record<string, unknown> {
 	const trimmed = text.trim();
 	if (!trimmed) {
@@ -42,7 +53,16 @@ function parsePayload(text: string, contentType: string): Record<string, unknown
 		}
 	}
 
-	return { _payloadKind: 'text', _raw: text };
+	const orderAction = parsePlainStrategyOrderAction(trimmed);
+	if (orderAction) {
+		return {
+			_source: 'plain-text',
+			_interpretation: '{{strategy.order.action}}',
+			strategyOrderAction: orderAction
+		};
+	}
+
+	return { _payloadKind: 'text', _raw: trimmed };
 }
 
 /**
@@ -64,12 +84,15 @@ export function captureWebhookBody(
 
 	if (!raw.length) {
 		req.rawBody = '';
+		req.rawBodyTrimmed = '';
 		req.body = {};
 		next();
 		return;
 	}
 
+	const trimmed = raw.trim();
 	req.rawBody = raw;
+	req.rawBodyTrimmed = trimmed;
 
 	const preview =
 		raw.length > MAX_LOG_CHARS
@@ -80,6 +103,9 @@ export function captureWebhookBody(
 		`[webhook] ${req.method} ${req.originalUrl} content-type=${req.headers['content-type'] ?? '(none)'} utf8Bytes=${Buffer.byteLength(raw, 'utf8')}`
 	);
 	console.log('[webhook] raw payload (string):', preview);
+	if (trimmed !== raw) {
+		console.log('[webhook] raw trimmed (for parse):', JSON.stringify(trimmed));
+	}
 
 	req.body = parsePayload(raw, req.headers['content-type'] || '');
 	next();

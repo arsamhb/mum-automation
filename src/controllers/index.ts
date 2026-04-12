@@ -45,11 +45,22 @@ router.get('/accounts', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-	console.log(
-		'Parsed alert payload:',
-		JSON.stringify(req.body),
-		req.rawBody != null ? `(raw length ${req.rawBody.length})` : ''
-	);
+	const inbound = {
+		rawBody: req.rawBody,
+		rawBodyTrimmed: req.rawBodyTrimmed,
+		parsed: req.body,
+		strategyOrderAction:
+			req.body && typeof (req.body as { strategyOrderAction?: unknown }).strategyOrderAction === 'string'
+				? (req.body as { strategyOrderAction: string }).strategyOrderAction
+				: undefined
+	};
+	console.log('[alert] inbound schema:', JSON.stringify(inbound));
+
+	// Set WEBHOOK_SCHEMA_PROBE=true in .env to skip validateAlert + trading and return JSON (inspect payload shape).
+	if (process.env.WEBHOOK_SCHEMA_PROBE === 'true') {
+		res.status(200).json({ ok: true, ...inbound });
+		return;
+	}
 
 	const validated = await validateAlert(req.body);
 	if (!validated) {

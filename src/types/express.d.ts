@@ -1,8 +1,12 @@
-import 'express-serve-static-core';
+export {};
 
-declare module 'express-serve-static-core' {
-	interface Request {
-		/** UTF-8 body as captured before JSON / text interpretation */
-		rawBody?: string;
+declare global {
+	namespace Express {
+		interface Request {
+			/** UTF-8 body as captured before JSON / text interpretation */
+			rawBody?: string;
+			/** Same body after trim (TradingView often adds a leading newline) */
+			rawBodyTrimmed?: string;
+		}
 	}
 }
