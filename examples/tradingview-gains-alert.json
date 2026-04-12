@@ -1,0 +1,10 @@
+{
+	"exchange": "gains",
+	"strategy": "ExampleStrategy",
+	"market": "BTC/USD",
+	"order": "buy",
+	"price": 95000,
+	"position": "long",
+	"reverse": false,
+	"sizeUsd": 50
+}

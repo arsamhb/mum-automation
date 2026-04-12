@@ -25,3 +25,11 @@ DydxV4:
     restEndpoint: https://dydx-ops-rpc.kingnodes.com
     # restEndpoint: https://dydx-rest.publicnode.com
     # restEndpoint: https://dydx-mainnet-full-rpc.public.blastapi.io
+Gains:
+  Network:
+    chainId: 42161
+    rpc: https://arb1.arbitrum.io/rpc
+  Backend:
+    url: https://backend-arbitrum.gains.trade
+  User:
+    slippage: 0.05

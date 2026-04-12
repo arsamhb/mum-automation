@@ -24,7 +24,11 @@ jest.mock('../src/services/dexRegistry', () => ({
 			'perpetual',
 			'gmx',
 			'bluefin',
-			'hyperliquid'
+			'hyperliquid',
+			'grvt',
+			'gains',
+			'gtrade',
+			'gns'
 		])
 	}))
 }));
@@ -62,6 +66,14 @@ describe('validateAlert', () => {
 			const result = await validateAlert({
 				...baseAlert,
 				exchange: 'hyperliquid'
+			});
+			expect(result).toBe(true);
+		});
+
+		it('accepts "gains" as valid exchange', async () => {
+			const result = await validateAlert({
+				...baseAlert,
+				exchange: 'gains'
 			});
 			expect(result).toBe(true);
 		});

@@ -12,7 +12,15 @@ router.get('/accounts', async (req, res) => {
 	console.log('Received GET request.');
 
 	const dexRegistry = new DexRegistry();
-	const dexNames = ['dydxv4', 'perpetual', 'gmx', 'bluefin', 'hyperliquid', 'grvt'];
+	const dexNames = [
+		'dydxv4',
+		'perpetual',
+		'gmx',
+		'bluefin',
+		'hyperliquid',
+		'grvt',
+		'gains'
+	];
 	const dexClients = dexNames.map((name) => dexRegistry.getDex(name));
 
 	try {
@@ -26,7 +34,8 @@ router.get('/accounts', async (req, res) => {
 			GMX: accountStatuses[2], // gmx
 			Bluefin: accountStatuses[3], // bluefin
 			Hyperliquid: accountStatuses[4], // hyperliquid
-			GRVT: accountStatuses[5] // grvt
+			GRVT: accountStatuses[5], // grvt
+			Gains_gTrade: accountStatuses[6] // gains
 		};
 		res.send(message);
 	} catch (error) {
@@ -36,7 +45,10 @@ router.get('/accounts', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-	console.log('Recieved Tradingview strategy alert:', req.body);
+	console.log(
+		'Received TradingView strategy alert JSON:',
+		JSON.stringify(req.body)
+	);
 
 	const validated = await validateAlert(req.body);
 	if (!validated) {

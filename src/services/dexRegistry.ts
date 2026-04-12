@@ -5,6 +5,7 @@ import { GmxClient } from './gmx/gmxClient';
 import { PerpClient } from './perp/perpClient';
 import { HyperliquidClient } from './hyperliquid/hyperliquidClient';
 import { GrvtDexClient } from './grvt/grvtClient';
+import { GainsClient } from './gains/gainsClient';
 
 export class DexRegistry {
 	private registeredDexs: Map<string, AbstractDexClient>;
@@ -18,6 +19,10 @@ export class DexRegistry {
 		this.registeredDexs.set('bluefin', new BluefinDexClient());
 		this.registeredDexs.set('hyperliquid', new HyperliquidClient());
 		this.registeredDexs.set('grvt', new GrvtDexClient());
+		const gains = new GainsClient();
+		this.registeredDexs.set('gains', gains);
+		this.registeredDexs.set('gtrade', gains);
+		this.registeredDexs.set('gns', gains);
 	}
 
 	getDex(dexKey: string): AbstractDexClient {

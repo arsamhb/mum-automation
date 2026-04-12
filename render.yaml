@@ -1,0 +1,22 @@
+# Render Blueprint: Web Service for TradingView → Gains (gTrade) alerts.
+# After push: Render Dashboard → New → Blueprint → connect this repo, or New → Web Service with these commands.
+# Webhook URL: https://<service-name>.onrender.com/  (POST JSON alert to /)
+# Logs: Dashboard → Service → Logs (incoming bodies are logged as JSON strings).
+
+services:
+  - type: web
+    name: tradingview-alert-connector
+    runtime: node
+    plan: starter
+    buildCommand: yarn install && yarn build
+    startCommand: yarn start:prod
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GAINS_LEVERAGE
+        value: "10"
+      # Set in the Render dashboard (Secret) — never commit real keys.
+      - key: GAINS_PRIVATE_KEY
+        sync: false
+      # Optional: add TRADINGVIEW_PASSPHRASE in the dashboard if you use alert passphrases.
