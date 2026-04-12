@@ -47,7 +47,18 @@ if (process.env.SENTRY_DNS) {
 
 app.use(helmet());
 
-app.use(express.json());
+// TradingView sends the alert message as text/plain with a JSON string in the body.
+// Default express.json() only handles application/json, so the body was {} and validation failed.
+app.use(
+	express.json({
+		type: (req) => {
+			const ct = req.headers['content-type'] || '';
+			return (
+				/^application\/json/i.test(ct) || /^text\/plain/i.test(ct)
+			);
+		}
+	})
+);
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/', controller);
