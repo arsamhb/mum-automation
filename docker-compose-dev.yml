@@ -1,11 +1,53 @@
-version: '3'
 services:
-  webserver:
-    build: ./
-    tty: true
+  redis:
+    image: redis:7-alpine
+    container_name: tv-connector-dev-redis
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - ./data:/app/data
-      - ./src:/app/src
+      - redis-dev-data:/data
     ports:
-      - '80:3000'
-    command: yarn start:dev
+      - "6379:6379"
+
+  api:
+    image: node:22.14
+    container_name: tv-connector-dev-api
+    working_dir: /app
+    command: sh -c "yarn install && yarn start:watch"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      PORT: ${PORT:-3000}
+      GAINS_NETWORK_NAME: ${GAINS_NETWORK_NAME:-sepolia}
+      HTTP_LOGGING_ENABLED: "true"
+    volumes:
+      - ./:/app
+      - node-modules-api:/app/node_modules
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      - redis
+
+  worker:
+    image: node:22.14
+    container_name: tv-connector-dev-worker
+    working_dir: /app
+    command: sh -c "yarn install && yarn start:worker:watch"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      GAINS_NETWORK_NAME: ${GAINS_NETWORK_NAME:-sepolia}
+      HTTP_LOGGING_ENABLED: "true"
+    volumes:
+      - ./:/app
+      - node-modules-worker:/app/node_modules
+    depends_on:
+      - redis
+
+volumes:
+  redis-dev-data:
+  node-modules-api:
+  node-modules-worker:

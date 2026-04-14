@@ -1,19 +1,24 @@
-jest.mock('../src/helper', () => ({
-	getStrategiesDB: jest.fn(() => {
-		const mockData: Record<string, any> = {};
-		const mockDb = {
-			push: jest.fn((path: string, value: any) => {
-				const parts = path.split('/').filter(Boolean);
-				let current = mockData;
-				for (let i = 0; i < parts.length - 1; i++) {
-					if (!current[parts[i]]) current[parts[i]] = {};
-					current = current[parts[i]];
-				}
-				current[parts[parts.length - 1]] = value;
-			})
-		};
-		return [mockDb, mockData];
-	})
+const mockData: Record<string, any> = {};
+const mockAdapter = {
+	getStrategy: jest.fn((strategy: string) => mockData[strategy]),
+	ensureStrategy: jest.fn((strategy: string, reverse: boolean) => {
+		if (!mockData[strategy]) {
+			mockData[strategy] = {
+				reverse,
+				isFirstOrder: 'true',
+				position: 0
+			};
+		}
+	}),
+	isFirstOrder: jest.fn((strategy: string) => mockData[strategy]?.isFirstOrder === 'true'),
+	getPosition: jest.fn((strategy: string) => Number(mockData[strategy]?.position ?? 0)),
+	markFirstOrderConsumed: jest.fn(),
+	applyPositionDelta: jest.fn(),
+	appendTradeHistory: jest.fn()
+};
+
+jest.mock('../src/state/strategyStateAdapter', () => ({
+	getStrategyStateAdapter: jest.fn(() => mockAdapter)
 }));
 
 jest.mock('../src/services/dexRegistry', () => ({
@@ -36,6 +41,10 @@ describe('validateAlert', () => {
 		position: 'long',
 		reverse: false
 	};
+
+	beforeEach(() => {
+		Object.keys(mockData).forEach((key) => delete mockData[key]);
+	});
 
 	describe('exchange validation', () => {
 		it('accepts "gains" as valid exchange', async () => {

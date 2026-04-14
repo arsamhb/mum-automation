@@ -19,5 +19,8 @@ export function normalizeGainsPairKey(market: string): string {
 	if (noPerp.endsWith('USD')) {
 		return `${noPerp.slice(0, -3)}/USD`;
 	}
+	console.log('************************************************ market ****************', market);
 	return market.trim();
 }
+
+

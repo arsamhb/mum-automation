@@ -1,9 +1,57 @@
-version: '3'
 services:
-  webserver:
-    build: ./
-    tty: true
+  redis:
+    image: redis:7-alpine
+    container_name: tv-connector-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+    container_name: tv-connector-api
+    command: ["node", "dist/index.js"]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      PORT: ${PORT:-3000}
+      GAINS_NETWORK_NAME: ${GAINS_NETWORK_NAME:-mainnet}
     volumes:
       - ./data:/app/data
     ports:
-      - '80:3000'
+      - "${PORT:-3000}:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build:
+      context: .
+    container_name: tv-connector-worker
+    command: ["node", "dist/workers/alertsWorker.js"]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      GAINS_NETWORK_NAME: ${GAINS_NETWORK_NAME:-mainnet}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis-data:

@@ -1,6 +1,6 @@
 import { AlertObject } from '../types';
-import { getStrategiesDB } from '../helper';
 import { DexRegistry } from './dexRegistry';
+import { getStrategyStateAdapter } from '../state/strategyStateAdapter';
 
 export const validateAlert = async (
 	alertMessage: AlertObject
@@ -65,27 +65,19 @@ export const validateAlert = async (
 		return false;
 	}
 
-	const [db, rootData] = getStrategiesDB();
-	console.log('strategyData', rootData[alertMessage.strategy]);
-
-	const rootPath = '/' + alertMessage.strategy;
-
-	if (!rootData[alertMessage.strategy]) {
-		const reversePath = rootPath + '/reverse';
-		db.push(reversePath, alertMessage.reverse);
-
-		const isFirstOrderPath = rootPath + '/isFirstOrder';
-		db.push(isFirstOrderPath, 'true');
-	}
+	const stateAdapter = getStrategyStateAdapter();
+	stateAdapter.ensureStrategy(alertMessage.strategy, alertMessage.reverse);
+	const strategyState = stateAdapter.getStrategy(alertMessage.strategy);
+	console.log('strategyData', strategyState);
 
 	if (
 		alertMessage.position == 'flat' &&
-		rootData[alertMessage.strategy].isFirstOrder == 'true'
+		stateAdapter.isFirstOrder(alertMessage.strategy)
 	) {
 		console.log(
-			'this alert is first and close order, so does not create a new order.'
+			'this alert is first and close order; it will be skipped until a long/short opens.'
 		);
-		return false;
+		return true;
 	}
 
 	return true;

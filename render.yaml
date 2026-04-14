@@ -4,19 +4,110 @@
 # Logs: Dashboard → Service → Logs (incoming bodies are logged as JSON strings).
 
 services:
+  # -----------------------------
+  # Staging (Arbitrum Sepolia)
+  # -----------------------------
+  - type: redis
+    name: tv-alerts-redis-staging
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+
   - type: web
-    name: tradingview-alert-connector
+    name: tv-alert-connector-api-staging
     runtime: node
     plan: starter
     buildCommand: yarn install && yarn build
     startCommand: yarn start:prod
-    healthCheckPath: /
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: GAINS_LEVERAGE
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tv-alerts-redis-staging
+          property: connectionString
+      - key: GAINS_NETWORK_NAME
+        value: sepolia
+      # API service does NOT require signer secrets.
+      # Optional hardening:
+      # - WEBHOOK_HMAC_SECRET
+      # - WEBHOOK_REPLAY_WINDOW_MS
+      # - TRADINGVIEW_PASSPHRASE
+
+  - type: worker
+    name: tv-alert-connector-worker-staging
+    runtime: node
+    plan: starter
+    buildCommand: yarn install && yarn build
+    startCommand: yarn start:worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tv-alerts-redis-staging
+          property: connectionString
+      - key: GAINS_NETWORK_NAME
+        value: sepolia
+      - key: GAINS_TRADE_LEVERAGE
         value: "10"
-      # Set in the Render dashboard (Secret) — never commit real keys.
-      - key: GAINS_PRIVATE_KEY
+      - key: GAINS_SIGNER_PRIVATE_KEY
         sync: false
-      # Optional: add TRADINGVIEW_PASSPHRASE in the dashboard if you use alert passphrases.
+      # Optional delegated mode:
+      # - GAINS_TRADER_ADDRESS
+
+  # -----------------------------
+  # Production (Arbitrum mainnet)
+  # -----------------------------
+  - type: redis
+    name: tv-alerts-redis-prod
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: tv-alert-connector-api-prod
+    runtime: node
+    plan: starter
+    buildCommand: yarn install && yarn build
+    startCommand: yarn start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tv-alerts-redis-prod
+          property: connectionString
+      - key: GAINS_NETWORK_NAME
+        value: mainnet
+      # API service does NOT require signer secrets.
+      # Strongly recommended:
+      # - WEBHOOK_HMAC_SECRET
+      # - WEBHOOK_REPLAY_WINDOW_MS
+      # - TRADINGVIEW_PASSPHRASE
+
+  - type: worker
+    name: tv-alert-connector-worker-prod
+    runtime: node
+    plan: starter
+    buildCommand: yarn install && yarn build
+    startCommand: yarn start:worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tv-alerts-redis-prod
+          property: connectionString
+      - key: GAINS_NETWORK_NAME
+        value: mainnet
+      - key: GAINS_TRADE_LEVERAGE
+        value: "10"
+      - key: GAINS_SIGNER_PRIVATE_KEY
+        sync: false
+      # Optional delegated mode:
+      # - GAINS_TRADER_ADDRESS
