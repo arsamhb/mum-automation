@@ -15,7 +15,7 @@ function mkAlert(partial: Partial<AlertObject> = {}): AlertObject {
 	};
 }
 
-describe('GainsClient close-then-open behavior', () => {
+describe('GainsClient open-only behavior', () => {
 	let client: GainsClient;
 
 	beforeEach(() => {
@@ -25,12 +25,8 @@ describe('GainsClient close-then-open behavior', () => {
 		(client as any).exportOrder = jest.fn(async () => undefined);
 	});
 
-	test('closes existing position before opening new one', async () => {
+	test('opens a long (buy/long)', async () => {
 		const order: string[] = [];
-		(client as any).closeAllOpenTradesForPair = jest.fn(async () => {
-			order.push('close');
-			return { closedCount: 1, lastOrderId: '0xclose' };
-		});
 		(client as any).openMarket = jest.fn(async (_a: AlertObject, _c: unknown, targetLong: boolean) => {
 			order.push('open');
 			expect(targetLong).toBe(true);
@@ -40,13 +36,10 @@ describe('GainsClient close-then-open behavior', () => {
 		const result = await client.placeOrder(mkAlert({ order: 'buy', position: 'long' }));
 		expect(result.success).toBe(true);
 		expect(result.orderId).toBe('0xopen');
-		expect(order).toEqual(['close', 'open']);
+		expect(order).toEqual(['open']);
 	});
 
-	test('still opens when no position is currently open', async () => {
-		(client as any).closeAllOpenTradesForPair = jest.fn(async () => ({
-			closedCount: 0
-		}));
+	test('opens a short (sell/short)', async () => {
 		(client as any).openMarket = jest.fn(async () => ({
 			size: 1000,
 			side: 'SELL',
@@ -58,31 +51,11 @@ describe('GainsClient close-then-open behavior', () => {
 		expect((client as any).openMarket).toHaveBeenCalledTimes(1);
 	});
 
-	test('does not open when close phase fails', async () => {
-		(client as any).closeAllOpenTradesForPair = jest.fn(async () => {
-			throw new Error('Close reconciliation pending for XAUUSD');
-		});
-		(client as any).openMarket = jest.fn(async () => ({
-			size: 1000,
-			side: 'BUY',
-			orderId: '0xopen'
-		}));
-
-		const result = await client.placeOrder(mkAlert());
-		expect(result.success).toBe(false);
-		expect(result.message).toContain('Close reconciliation pending');
-		expect((client as any).openMarket).not.toHaveBeenCalled();
-	});
-
-	test('fails when open phase fails after close phase', async () => {
-		(client as any).closeAllOpenTradesForPair = jest.fn(async () => ({
-			closedCount: 1,
-			lastOrderId: '0xclose'
-		}));
+	test('fails when open phase fails', async () => {
 		(client as any).openMarket = jest.fn(async () => undefined);
 
 		const result = await client.placeOrder(mkAlert());
 		expect(result.success).toBe(false);
-		expect(result.message).toContain('not submitted after close phase');
+		expect(result.message).toContain('not submitted');
 	});
 });

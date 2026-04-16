@@ -296,35 +296,12 @@ export class GainsClient extends AbstractDexClient {
 		if (alertMessage.price != null)
 			alertMessage.price = Number(alertMessage.price);
 		try {
-			const stateAdapter = getStrategyStateAdapter();
-			const isFirstOrder = stateAdapter.isFirstOrder(alertMessage.strategy);
-			if (alertMessage.position === 'flat' && isFirstOrder) {
-				console.log(
-					'Gains: skipping flat signal because strategy has no opened long/short yet'
-				);
+			const collateralType = resolveCollateralType(alertMessage.collateral);
+			if (alertMessage.position === 'flat') {
 				return {
 					success: true,
 					skipped: true,
-					message: 'Skipped flat signal before any long/short order'
-				};
-			}
-
-			const collateralType = resolveCollateralType(alertMessage.collateral);
-			if (alertMessage.position === 'flat') {
-				const closeOnlyResult = await this.closeAllOpenTradesForPair(
-					alertMessage,
-					collateralType
-				);
-				if (closeOnlyResult.closedCount === 0) {
-					return {
-						success: true,
-						skipped: true,
-						message: 'Skipped flat signal because no open trade exists'
-					};
-				}
-				return {
-					success: true,
-					orderId: closeOnlyResult.lastOrderId
+					message: 'Skipped flat signal (flat/close flow disabled)'
 				};
 			}
 
@@ -337,10 +314,6 @@ export class GainsClient extends AbstractDexClient {
 				};
 			}
 
-			const closeResult = await this.closeAllOpenTradesForPair(
-				alertMessage,
-				collateralType
-			);
 			const orderResult = await this.openMarket(
 				alertMessage,
 				collateralType,
@@ -350,7 +323,7 @@ export class GainsClient extends AbstractDexClient {
 				return {
 					success: false,
 					message:
-						'Gains order was not submitted after close phase (preflight/revert)'
+						'Gains order was not submitted (preflight/revert)'
 				};
 			}
 			await this.exportOrder(
@@ -360,9 +333,7 @@ export class GainsClient extends AbstractDexClient {
 				alertMessage.price,
 				alertMessage.market
 			);
-			console.log(
-				`Gains: close-then-open complete for ${alertMessage.market}; closed=${closeResult.closedCount}`
-			);
+			console.log(`Gains: open complete for ${alertMessage.market}`);
 			return {
 				success: true,
 				orderId: orderResult.orderId
@@ -953,9 +924,10 @@ export class GainsClient extends AbstractDexClient {
 
 		if (pairTrades.length === 0) {
 			if (localPosition !== 0) {
-				throw new Error(
-					`Close reconciliation pending for ${pairKey}; no open trades visible yet`
+				console.warn(
+					`Gains: close reconciliation self-heal for ${pairKey}; localPosition=${localPosition} but backend shows no open trades. Resetting local strategy position to 0 and continuing.`
 				);
+				stateAdapter.applyPositionDelta(alertMessage.strategy, -1 * localPosition);
 			}
 			return { closedCount: 0 };
 		}
