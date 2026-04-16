@@ -180,6 +180,7 @@ Connector states:
 - `MINED`
 - `RETRYING`
 - `CONFIRMED`
+- `SKIPPED`
 - `FAILED`
 
 Behavioral notes:
@@ -187,6 +188,7 @@ Behavioral notes:
 - `POST /alerts` is asynchronous acceptance, not execution completion.
 - Worker transitions states after queue pickup and chain actions.
 - `CONFIRMED` is terminal success.
+- `SKIPPED` is terminal no-op success (connector accepted the intent but intentionally did not enqueue/execute it, e.g. `position: "flat"` close signals when close flow is disabled).
 - `FAILED` is terminal failure (includes `lastError`; payload copied to DLQ queue `tv-alerts-dlq`).
 - Retry path increments `retryCount` and sets `RETRYING` before next attempt.
 
@@ -232,6 +234,7 @@ Minimum recommended open-position payload:
 - `reverse`: boolean
 - one sizing field: `sizeUsd` (recommended) or `size` or `sizeByLeverage`
 - `leverage`: positive number
+- `tp` / `sl` (optional): numeric deltas from entry price (not absolute levels). For example, if `price=100` and `tp=20` on a long, connector converts it to an absolute TP price of `120` before submitting to Gains.
 
 Close signal payload:
 

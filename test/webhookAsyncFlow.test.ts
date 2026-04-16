@@ -54,6 +54,7 @@ jest.mock('../src/observability/metrics', () => ({
 
 describe('async webhook contract', () => {
 	beforeEach(() => {
+		jest.clearAllMocks();
 		stateById.clear();
 		stateByKey.clear();
 	});
@@ -88,6 +89,39 @@ describe('async webhook contract', () => {
 		const status = await request(app).get(`/alerts/${res.body.alertId}`);
 		expect(status.status).toBe(200);
 		expect(status.body.status).toBe('ENQUEUED');
+	});
+
+	test('accepts flat signal but does not enqueue', async () => {
+		const { enqueueAlert } = await import('../src/queue/alertsQueue');
+		const router = (await import('../src/controllers/index')).default;
+		const app = express();
+		app.use(express.text({ type: () => true }));
+		app.use(captureWebhookBody);
+		app.use(attachRequestContext);
+		app.use(router);
+
+		const payload = {
+			exchange: 'gains',
+			strategy: 'Aura',
+			market: 'XAUUSD',
+			order: 'buy',
+			position: 'flat',
+			price: '4776.610',
+			reverse: false
+		};
+
+		const res = await request(app)
+			.post('/alerts')
+			.set('Content-Type', 'text/plain')
+			.send(JSON.stringify(payload));
+		expect(res.status).toBe(202);
+		expect(res.body.status).toBe('SKIPPED');
+		expect(res.body.skipped).toBe(true);
+		expect(enqueueAlert).not.toHaveBeenCalled();
+
+		const status = await request(app).get(`/alerts/${res.body.alertId}`);
+		expect(status.status).toBe(200);
+		expect(status.body.status).toBe('SKIPPED');
 	});
 
 	test('deduplicates repeated alert payload', async () => {

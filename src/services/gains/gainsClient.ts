@@ -78,6 +78,45 @@ function encodeOptionalOraclePrice(
 	return encodeOraclePrice(parsed);
 }
 
+export function tpSlDeltaToAbsolute(params: {
+	entryPrice: number;
+	targetLong: boolean;
+	tpDelta?: unknown;
+	slDelta?: unknown;
+}): { tpAbs?: number; slAbs?: number } {
+	const { entryPrice, targetLong } = params;
+	const tp = Number(params.tpDelta);
+	const sl = Number(params.slDelta);
+
+	const tpDelta =
+		params.tpDelta === undefined || params.tpDelta === null || params.tpDelta === ''
+			? undefined
+			: Number.isFinite(tp)
+				? tp
+				: undefined;
+	const slDelta =
+		params.slDelta === undefined || params.slDelta === null || params.slDelta === ''
+			? undefined
+			: Number.isFinite(sl)
+				? sl
+				: undefined;
+
+	const tpAbs =
+		tpDelta === undefined || tpDelta === 0
+			? undefined
+			: targetLong
+				? entryPrice + tpDelta
+				: entryPrice - tpDelta;
+	const slAbs =
+		slDelta === undefined || slDelta === 0
+			? undefined
+			: targetLong
+				? entryPrice - slDelta
+				: entryPrice + slDelta;
+
+	return { tpAbs, slAbs };
+}
+
 function encodeLeverage(leverage: number): number {
 	return Math.round(leverage * LEVERAGE_PRECISION);
 }
@@ -439,14 +478,14 @@ export class GainsClient extends AbstractDexClient {
 		);
 
 		const openPrice = encodeOraclePrice(alertMessage.price);
-		const tp = encodeOptionalOraclePrice(
-			(alertMessage as AlertObject & { tp?: unknown }).tp,
-			'tp'
-		);
-		const sl = encodeOptionalOraclePrice(
-			(alertMessage as AlertObject & { sl?: unknown }).sl,
-			'sl'
-		);
+		const { tpAbs, slAbs } = tpSlDeltaToAbsolute({
+			entryPrice: alertMessage.price,
+			targetLong,
+			tpDelta: (alertMessage as AlertObject & { tp?: unknown }).tp,
+			slDelta: (alertMessage as AlertObject & { sl?: unknown }).sl
+		});
+		const tp = encodeOptionalOraclePrice(tpAbs, 'tp');
+		const sl = encodeOptionalOraclePrice(slAbs, 'sl');
 
 		const trade = {
 			user: this.traderAddress,
@@ -492,7 +531,7 @@ export class GainsClient extends AbstractDexClient {
 				'Gains: delegate mode enabled (signer != trader); skipping local allowance check. Ensure trader wallet approved collateral + delegated signer in gTrade.'
 			);
 		}
-		const canOpenTrade = await this.preflightOpenTrade({
+		const preflight = await this.preflightOpenTrade({
 			gnsMultiCollatDiamond,
 			trade,
 			maxSlippageP,
@@ -502,7 +541,12 @@ export class GainsClient extends AbstractDexClient {
 			orderSizeUsd,
 			decimals: Number(decimals)
 		});
-		if (!canOpenTrade) return undefined;
+		if (!preflight.ok) {
+			if (preflight.reason) {
+				throw new Error(preflight.reason);
+			}
+			return undefined;
+		}
 
 		let tx;
 		try {
@@ -589,6 +633,18 @@ export class GainsClient extends AbstractDexClient {
 		);
 	}
 
+	private decodeRevertReason(
+		methodName: string,
+		contract: ethers.Contract,
+		error: unknown
+	): string | undefined {
+		const revertData = this.extractRevertData(error);
+		if (!revertData) return undefined;
+		const decoded = this.decodeContractError(contract, revertData);
+		if (decoded) return `Gains ${methodName} reverted with custom error: ${decoded}`;
+		return `Gains ${methodName} reverted with raw data: ${revertData.slice(0, 10)}`;
+	}
+
 	private async preflightOpenTrade(params: {
 		gnsMultiCollatDiamond: ethers.Contract;
 		trade: {
@@ -614,14 +670,14 @@ export class GainsClient extends AbstractDexClient {
 		leverage: number;
 		orderSizeUsd: number;
 		decimals: number;
-	}): Promise<boolean> {
+	}): Promise<{ ok: boolean; reason?: string }> {
 		try {
 			await params.gnsMultiCollatDiamond.estimateGas.openTrade(
 				params.trade,
 				params.maxSlippageP,
 				params.referrer
 			);
-			return true;
+			return { ok: true };
 		} catch (e) {
 			const revertData = this.extractRevertData(e);
 			if (revertData === INSUFFICIENT_COLLATERAL_SELECTOR) {
@@ -639,10 +695,15 @@ export class GainsClient extends AbstractDexClient {
 						4
 					)}.${suggestion}`
 				);
-				return false;
+				return { ok: false, reason: 'Gains: InsufficientCollateral() preflight' };
 			}
+			const reason = this.decodeRevertReason(
+				'openTrade preflight',
+				params.gnsMultiCollatDiamond,
+				e
+			);
 			this.logDecodedRevert('openTrade preflight', params.gnsMultiCollatDiamond, e);
-			return false;
+			return { ok: false, reason };
 		}
 	}
 

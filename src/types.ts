@@ -27,6 +27,7 @@ export type AlertLifecycleStatus =
 	| 'MINED'
 	| 'RETRYING'
 	| 'CONFIRMED'
+	| 'SKIPPED'
 	| 'FAILED';
 
 export type NormalizedAlert = AlertObject & {
