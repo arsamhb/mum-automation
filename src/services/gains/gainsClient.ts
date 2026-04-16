@@ -26,6 +26,8 @@ const ERC20_ABI = [
 ];
 const INSUFFICIENT_COLLATERAL_SELECTOR = '0x3a23d825';
 
+type RetryAfterSeconds = number;
+
 function readFirstEnv(...keys: string[]): string | undefined {
 	for (const key of keys) {
 		const value = process.env[key]?.trim();
@@ -57,6 +59,23 @@ function encodeOraclePrice(humanPrice: number): BigNumber {
 		// eslint-disable-next-line @typescript-eslint/no-loss-of-precision
 		Math.floor(humanPrice * PRICE_PRECISION)
 	);
+}
+
+function encodeOptionalOraclePrice(
+	value: unknown,
+	fieldName: 'tp' | 'sl'
+): BigNumber {
+	if (value === undefined || value === null || value === '') {
+		return BigNumber.from(0);
+	}
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) {
+		throw new Error(
+			`Invalid ${fieldName} for gTrade (must be a number >= 0, where 0 means unset)`
+		);
+	}
+	if (parsed === 0) return BigNumber.from(0);
+	return encodeOraclePrice(parsed);
 }
 
 function encodeLeverage(leverage: number): number {
@@ -100,6 +119,27 @@ function getFillWatchMaxMs(): number {
 	return v ? parseInt(v, 10) : 120_000;
 }
 
+function clampInt(n: number, min: number, max: number): number {
+	if (!Number.isFinite(n)) return min;
+	return Math.max(min, Math.min(max, Math.trunc(n)));
+}
+
+function jitterMs(baseMs: number, jitterRatio = 0.2): number {
+	const r = Math.max(0, jitterRatio);
+	const delta = baseMs * r;
+	return Math.max(0, Math.round(baseMs - delta + Math.random() * (2 * delta)));
+}
+
+function parseRetryAfterSeconds(value: unknown): RetryAfterSeconds | undefined {
+	if (typeof value !== 'string') return undefined;
+	const trimmed = value.trim();
+	if (!trimmed) return undefined;
+	// Most APIs return seconds. HTTP also allows a date, but we keep it simple.
+	const n = Number(trimmed);
+	if (Number.isFinite(n) && n >= 0) return n;
+	return undefined;
+}
+
 export class GainsClient extends AbstractDexClient {
 	private signer: ethers.Wallet | undefined;
 	private readonly traderAddress: string | undefined;
@@ -107,6 +147,13 @@ export class GainsClient extends AbstractDexClient {
 	private readonly backendUrl: string;
 	private readonly rpcUrl: string;
 	private readonly collateral: CollateralTypes;
+
+	/**
+	 * Simple per-(backend,trader) spacing so multiple concurrent jobs don't hammer the same endpoint.
+	 * This is intentionally process-local; if you run multiple worker instances, also add infra-level rate limiting.
+	 */
+	private static backendNextAllowedAtByKey = new Map<string, number>();
+	private static backendQueueByKey = new Map<string, Promise<void>>();
 
 	constructor() {
 		super();
@@ -195,7 +242,7 @@ export class GainsClient extends AbstractDexClient {
 	}
 
 	private async fetchTradingVariablesRaw(): Promise<Record<string, unknown>> {
-		const { data } = await axios.get<Record<string, unknown>>(
+		const { data } = await this.backendGet<Record<string, unknown>>(
 			`${this.backendUrl}/trading-variables`,
 			{ timeout: 30_000 }
 		);
@@ -219,7 +266,7 @@ export class GainsClient extends AbstractDexClient {
 			return undefined;
 		}
 		const idx = this.getCollateralIndex(collateralType) - 1;
-		const { data } = await axios.get<{
+		const { data } = await this.backendGet<{
 			collaterals?: Array<{ balance: string; decimals: number }>;
 		}>(`${this.backendUrl}/user-trading-variables/${this.traderAddress}`, {
 			timeout: 30_000
@@ -421,8 +468,14 @@ export class GainsClient extends AbstractDexClient {
 		);
 
 		const openPrice = encodeOraclePrice(alertMessage.price);
-		const tp = BigNumber.from(0);
-		const sl = BigNumber.from(0);
+		const tp = encodeOptionalOraclePrice(
+			(alertMessage as AlertObject & { tp?: unknown }).tp,
+			'tp'
+		);
+		const sl = encodeOptionalOraclePrice(
+			(alertMessage as AlertObject & { sl?: unknown }).sl,
+			'sl'
+		);
 
 		const trade = {
 			user: this.traderAddress,
@@ -691,17 +744,24 @@ export class GainsClient extends AbstractDexClient {
 		long: boolean;
 		txHash: string;
 	}): Promise<void> {
-		const pollMs = getFillPollMs();
+		const basePollMs = getFillPollMs();
 		const maxMs = getFillWatchMaxMs();
 		const started = Date.now();
 		console.log(
 			`Gains: open tx mined (${params.txHash}); polling for trade index ${params.expectedTradeIndex} on pair ${params.pairIndex} (async fill, max ${maxMs}ms)`
 		);
 
+		// Backoff helps avoid backend 429s and gives indexers time to catch up.
+		let attempt = 0;
 		while (Date.now() - started < maxMs) {
-			await _sleep(pollMs);
+			const pollMs = clampInt(
+				Math.round(basePollMs * Math.pow(1.6, attempt)),
+				basePollMs,
+				30_000
+			);
+			await _sleep(jitterMs(pollMs, 0.25));
 			try {
-				const { data } = await axios.get<
+				const { data } = await this.backendGet<
 					Array<{
 						trade: {
 							index: number | string;
@@ -724,7 +784,10 @@ export class GainsClient extends AbstractDexClient {
 					);
 					return;
 				}
+				attempt = Math.min(attempt + 1, 20);
 			} catch (e) {
+				// backendGet already retries on 429/transient failures; if it still errors, slow down the watch loop.
+				attempt = Math.min(attempt + 2, 20);
 				console.warn('Gains: open-trades poll error (will retry)', e);
 			}
 		}
@@ -773,12 +836,99 @@ export class GainsClient extends AbstractDexClient {
 	private async fetchOpenTrades(): Promise<
 		Array<{ trade: { index: number; pairIndex: number; long: boolean } }>
 	> {
-		const { data } = await axios.get<
+		const { data } = await this.backendGet<
 			Array<{ trade: { index: number; pairIndex: number; long: boolean } }>
 		>(`${this.backendUrl}/open-trades/${this.traderAddress}`, {
 			timeout: 30_000
 		});
 		return data;
+	}
+
+	private backendKey(): string {
+		return `${this.backendUrl}|${(this.traderAddress || 'unknown').toLowerCase()}`;
+	}
+
+	private async backendSpacingDelay(): Promise<void> {
+		const minIntervalMs = clampInt(
+			Number(readFirstEnv('GAINS_BACKEND_MIN_INTERVAL_MS') || '750'),
+			0,
+			60_000
+		);
+		if (minIntervalMs <= 0) return;
+
+		const key = this.backendKey();
+		const prior = GainsClient.backendQueueByKey.get(key) || Promise.resolve();
+		let release!: () => void;
+		const current = new Promise<void>((r) => (release = r));
+		GainsClient.backendQueueByKey.set(
+			key,
+			prior.finally(async () => {
+				const now = Date.now();
+				const nextAllowed = GainsClient.backendNextAllowedAtByKey.get(key) || now;
+				const waitMs = Math.max(0, nextAllowed - now);
+				if (waitMs > 0) await _sleep(waitMs);
+				GainsClient.backendNextAllowedAtByKey.set(key, Date.now() + minIntervalMs);
+				release();
+			})
+		);
+		await current;
+	}
+
+	private async backendGet<T>(
+		url: string,
+		options: { timeout: number }
+	): Promise<{ data: T }> {
+		// Keep this conservative: we only retry safe GETs.
+		const maxAttempts = clampInt(
+			Number(readFirstEnv('GAINS_BACKEND_GET_RETRIES') || '6'),
+			0,
+			20
+		);
+
+		let attempt = 0;
+		// eslint-disable-next-line no-constant-condition
+		while (true) {
+			await this.backendSpacingDelay();
+			try {
+				return await axios.get<T>(url, { timeout: options.timeout });
+			} catch (err) {
+				const e = err as any;
+				const status: number | undefined = e?.response?.status;
+				const retryAfterSeconds = parseRetryAfterSeconds(
+					e?.response?.headers?.['retry-after']
+				);
+				const is429 = status === 429;
+				const isTransient =
+					is429 ||
+					status === 408 ||
+					status === 425 ||
+					status === 502 ||
+					status === 503 ||
+					status === 504;
+
+				if (!isTransient || attempt >= maxAttempts) throw err;
+
+				const base = clampInt(
+					Number(readFirstEnv('GAINS_BACKEND_RETRY_BASE_MS') || '800'),
+					100,
+					10_000
+				);
+				const cap = clampInt(
+					Number(readFirstEnv('GAINS_BACKEND_RETRY_CAP_MS') || '30_000'),
+					base,
+					120_000
+				);
+				const backoffMs = Math.min(cap, Math.round(base * Math.pow(2, attempt)));
+				const waitMs = retryAfterSeconds
+					? clampInt(Math.round(retryAfterSeconds * 1000), 0, 300_000)
+					: jitterMs(backoffMs, 0.3);
+				attempt++;
+				console.warn(
+					`Gains: backend GET retrying (status=${status ?? 'n/a'} attempt=${attempt}/${maxAttempts} wait=${waitMs}ms url=${url})`
+				);
+				await _sleep(waitMs);
+			}
+		}
 	}
 
 	private async closeAllOpenTradesForPair(

@@ -8,6 +8,8 @@ export type AlertObject = {
 	leverage?: number;
 	levrage?: number;
 	Levrage?: number;
+	tp?: number | string;
+	sl?: number | string;
 	order: string;
 	price: number;
 	position: string;

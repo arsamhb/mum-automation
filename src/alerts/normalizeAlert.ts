@@ -34,6 +34,8 @@ export function normalizeAlert(input: AlertObject): NormalizedAlert {
 	if (normalized.sizeByLeverage !== undefined)
 		normalized.sizeByLeverage = Number(normalized.sizeByLeverage);
 	if (normalized.price !== undefined) normalized.price = Number(normalized.price);
+	if (normalized.tp !== undefined) normalized.tp = Number(normalized.tp);
+	if (normalized.sl !== undefined) normalized.sl = Number(normalized.sl);
 
 	return normalized;
 }
