@@ -91,7 +91,7 @@ describe('async webhook contract', () => {
 		expect(status.body.status).toBe('ENQUEUED');
 	});
 
-	test('accepts flat signal but does not enqueue', async () => {
+	test('accepts flat signal and enqueues async execution', async () => {
 		const { enqueueAlert } = await import('../src/queue/alertsQueue');
 		const router = (await import('../src/controllers/index')).default;
 		const app = express();
@@ -115,13 +115,12 @@ describe('async webhook contract', () => {
 			.set('Content-Type', 'text/plain')
 			.send(JSON.stringify(payload));
 		expect(res.status).toBe(202);
-		expect(res.body.status).toBe('SKIPPED');
-		expect(res.body.skipped).toBe(true);
-		expect(enqueueAlert).not.toHaveBeenCalled();
+		expect(res.body.status).toBe('RECEIVED');
+		expect(enqueueAlert).toHaveBeenCalledTimes(1);
 
 		const status = await request(app).get(`/alerts/${res.body.alertId}`);
 		expect(status.status).toBe(200);
-		expect(status.body.status).toBe('SKIPPED');
+		expect(status.body.status).toBe('ENQUEUED');
 	});
 
 	test('deduplicates repeated alert payload', async () => {

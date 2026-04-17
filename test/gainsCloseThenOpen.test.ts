@@ -15,7 +15,7 @@ function mkAlert(partial: Partial<AlertObject> = {}): AlertObject {
 	};
 }
 
-describe('GainsClient open-only behavior', () => {
+describe('GainsClient close/open behavior', () => {
 	let client: GainsClient;
 
 	beforeEach(() => {
@@ -25,8 +25,33 @@ describe('GainsClient open-only behavior', () => {
 		(client as any).exportOrder = jest.fn(async () => undefined);
 	});
 
-	test('opens a long (buy/long)', async () => {
+	test('closes only when signal is flat', async () => {
+		(client as any).closeAllOpenTradesForPair = jest.fn(async () => ({
+			closedCount: 2,
+			lastOrderId: '0xclose'
+		}));
+		(client as any).openMarket = jest.fn(async () => ({
+			size: 1000,
+			side: 'BUY',
+			orderId: '0xopen'
+		}));
+
+		const result = await client.placeOrder(
+			mkAlert({ order: 'buy', position: 'flat' })
+		);
+		expect(result.success).toBe(true);
+		expect(result.orderId).toBe('0xclose');
+		expect((client as any).closeAllOpenTradesForPair).toHaveBeenCalledTimes(1);
+		expect((client as any).openMarket).not.toHaveBeenCalled();
+	});
+
+	test('closes opposite side first, then opens the new side', async () => {
 		const order: string[] = [];
+		(client as any).hasOppositeOpenTradeForPair = jest.fn(async () => true);
+		(client as any).closeAllOpenTradesForPair = jest.fn(async () => {
+			order.push('close');
+			return { closedCount: 1, lastOrderId: '0xclose' };
+		});
 		(client as any).openMarket = jest.fn(async (_a: AlertObject, _c: unknown, targetLong: boolean) => {
 			order.push('open');
 			expect(targetLong).toBe(true);
@@ -36,10 +61,14 @@ describe('GainsClient open-only behavior', () => {
 		const result = await client.placeOrder(mkAlert({ order: 'buy', position: 'long' }));
 		expect(result.success).toBe(true);
 		expect(result.orderId).toBe('0xopen');
-		expect(order).toEqual(['open']);
+		expect(order).toEqual(['close', 'open']);
 	});
 
-	test('opens a short (sell/short)', async () => {
+	test('opens directly when no opposite trade exists', async () => {
+		(client as any).hasOppositeOpenTradeForPair = jest.fn(async () => false);
+		(client as any).closeAllOpenTradesForPair = jest.fn(async () => ({
+			closedCount: 0
+		}));
 		(client as any).openMarket = jest.fn(async () => ({
 			size: 1000,
 			side: 'SELL',
@@ -49,9 +78,11 @@ describe('GainsClient open-only behavior', () => {
 		const result = await client.placeOrder(mkAlert({ order: 'sell', position: 'short' }));
 		expect(result.success).toBe(true);
 		expect((client as any).openMarket).toHaveBeenCalledTimes(1);
+		expect((client as any).closeAllOpenTradesForPair).not.toHaveBeenCalled();
 	});
 
 	test('fails when open phase fails', async () => {
+		(client as any).hasOppositeOpenTradeForPair = jest.fn(async () => false);
 		(client as any).openMarket = jest.fn(async () => undefined);
 
 		const result = await client.placeOrder(mkAlert());

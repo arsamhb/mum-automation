@@ -123,30 +123,6 @@ async function enqueueAlertRequest(req: express.Request, res: express.Response) 
 			return;
 		}
 
-		if (normalized.position === 'flat') {
-			await createInitialAlertState({
-				alert: normalized,
-				idempotency: idempotencyKey
-			});
-			await transitionAlertState(normalized.alertId, 'VALIDATED');
-			await transitionAlertState(normalized.alertId, 'SKIPPED', {
-				lastError: 'Skipped flat signal (accept-but-no-enqueue)'
-			});
-			logInfo('api.alert.skipped', {
-				requestId: req.requestId,
-				alertId: normalized.alertId,
-				idempotencyKey,
-				reason: 'flat'
-			});
-			res.status(202).json({
-				alertId: normalized.alertId,
-				idempotencyKey,
-				status: 'SKIPPED',
-				skipped: true
-			});
-			return;
-		}
-
 		const job = await enqueueAlert({
 			alertId: normalized.alertId,
 			idempotencyKey,

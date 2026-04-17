@@ -337,10 +337,17 @@ export class GainsClient extends AbstractDexClient {
 		try {
 			const collateralType = resolveCollateralType(alertMessage.collateral);
 			if (alertMessage.position === 'flat') {
+				const closeResult = await this.closeAllOpenTradesForPair(
+					alertMessage,
+					collateralType
+				);
 				return {
 					success: true,
-					skipped: true,
-					message: 'Skipped flat signal (flat/close flow disabled)'
+					message:
+						closeResult.closedCount > 0
+							? `Closed ${closeResult.closedCount} open trade(s) for ${alertMessage.market}`
+							: `No open trades to close for ${alertMessage.market}`,
+					orderId: closeResult.lastOrderId
 				};
 			}
 
@@ -351,6 +358,14 @@ export class GainsClient extends AbstractDexClient {
 					message:
 						'Could not resolve target side from alert (expected buy/long or sell/short)'
 				};
+			}
+
+			const hasOppositeOpenTrade = await this.hasOppositeOpenTradeForPair(
+				alertMessage,
+				targetLong
+			);
+			if (hasOppositeOpenTrade) {
+				await this.closeAllOpenTradesForPair(alertMessage, collateralType);
 			}
 
 			const orderResult = await this.openMarket(
@@ -874,6 +889,18 @@ export class GainsClient extends AbstractDexClient {
 			timeout: 30_000
 		});
 		return data;
+	}
+
+	private async hasOppositeOpenTradeForPair(
+		alertMessage: AlertObject,
+		targetLong: boolean
+	): Promise<boolean> {
+		const { pairIndex } = await this.resolvePairIndex(alertMessage);
+		const openTrades = await this.fetchOpenTrades();
+		return openTrades.some(
+			(c) =>
+				Number(c.trade.pairIndex) === pairIndex && c.trade.long !== targetLong
+		);
 	}
 
 	private backendKey(): string {
